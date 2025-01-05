@@ -12,6 +12,6 @@ services:
       context: .
       dockerfile: BookCatalogFrontend/Dockerfile
     ports:
-      - "8080:80"
+      - "5199:80"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development

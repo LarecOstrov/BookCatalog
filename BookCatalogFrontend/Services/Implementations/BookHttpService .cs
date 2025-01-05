@@ -14,6 +14,7 @@ namespace BookCatalogFrontend.Services.Implementations
         public BookHttpService(HttpClient httpClient)
         {
             _httpClient = httpClient;
+            
         }
 
         public async Task<PagedResult<Book>> GetBooksAsync(string? title, string? author, string? genre, string? sorting, string? order, int? page = 0, int? pageSize = 20)
