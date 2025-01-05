@@ -30,7 +30,7 @@ To run this application locally, ensure you have the following installed:
    - Run Multiple project
      
 **Verify Application**:
-   - Open `http://localhost:44365` in your browser to view the application.
+   - Open `https://localhost:44365` in your browser to view the application.
 ---
 
 ## Running with Docker Compose
