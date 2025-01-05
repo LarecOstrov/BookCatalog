@@ -1,0 +1,62 @@
+﻿@page "/edit-book/{id:guid?}"
+@using BookCatalog.Shared.DbModels
+@using BookCatalogFrontend.Services.Interfaces
+@using Microsoft.AspNetCore.Components.Forms
+@inject IBookHttpService BookService
+@inject NavigationManager NavigationManager
+
+<div class="container">
+    <h3 class="mt-3">@((id == null) ? "Add Book" : "Edit Book")</h3>
+
+    <EditForm Model="_book" OnValidSubmit="SaveBook">
+        <div class="form-group">
+            <label for="title">Title:</label>
+            <InputText id="title" class="form-control" @bind-Value="_book.Title" required />
+        </div>
+        <div class="form-group">
+            <label for="author">Author:</label>
+            <InputText id="author" class="form-control" @bind-Value="_book.Author" required />
+        </div>
+        <div class="form-group">
+            <label for="genre">Genre:</label>
+            <InputText id="genre" class="form-control" @bind-Value="_book.Genre" required />
+        </div>
+        <div class="form-group">
+            <label for="publishedYear">Published Year:</label>
+            <InputNumber id="publishedYear" class="form-control" @bind-Value="_book.PublishedYear" max="@DateTime.UtcNow.Year" min="0" />
+        </div>
+        <button type="submit" class="btn btn-success me-3">Save</button>
+        <a href="/" class="btn btn-secondary">Cancel</a>
+    </EditForm>
+</div>
+
+@code {
+    [Parameter] public Guid? id { get; set; }
+    private Book _book = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (id.HasValue)
+        {
+            var data = await BookService.GetBookAsync(id.Value);
+            if (data == null)
+            {
+                NavigationManager.NavigateTo("/");
+            }
+            _book = data;
+        }
+    }
+
+    private async Task SaveBook()
+    {
+        if (id.HasValue)
+        {
+            await BookService.UpdateBookAsync(id.Value, _book);
+        }
+        else
+        {
+            await BookService.CreateBookAsync(_book);
+        }
+        NavigationManager.NavigateTo("/");
+    }
+}

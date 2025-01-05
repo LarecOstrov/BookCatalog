@@ -1,0 +1,340 @@
+﻿@page "/"
+@using BookCatalog.Shared.DbModels
+@using BookCatalog.Shared.Models
+@using BookCatalogFrontend.Services.Interfaces
+@using Microsoft.AspNetCore.Http
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.JSInterop
+@inject IBookHttpService BookService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<div class="container">
+    <h3 class="mt-3">Book Catalog</h3>
+
+    @if (!string.IsNullOrEmpty(_message))
+    {
+        <div class="alert @_alertType alert-dismissible fade show" role="alert">
+            @_message
+            <button type="button" class="close" data-dismiss="alert" aria-label="Close" @onclick="ClearMessage">
+                <span aria-hidden="true">&times;</span>
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="alert  alert-dismissible">
+            <span>&nbsp;</span>
+        </div>
+    }
+
+    <div class="row mb-3">
+        <div class="col-md-4 mb-2">
+            <input type="text" class="form-control" @bind="_searchTitle" placeholder="Search by title" />
+        </div>
+        <div class="col-md-4 mb-2">
+            <input type="text" class="form-control" @bind="_searchAuthor" placeholder="Search by author" />
+        </div>
+        <div class="col-md-4 mb-2">
+            <input type="text" class="form-control" @bind="_searchGenre" placeholder="Search by genre" />
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-4 mb-2">
+            <button class="btn btn-primary w-100" @onclick="AddNewBook" disabled="@(_isAddingNewBook)">Add Book</button>
+        </div>
+        <div class="col-md-4 mb-2">
+            <button class="btn btn-secondary w-100" @onclick="async () => await SearchBooks()">Search</button>
+        </div>
+        <div class="col-md-4 mb-2">
+            <button class="btn btn-outline-secondary w-100" @onclick="async () => await ResetBooks()">Reset</button>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-6 mb-2">
+            <InputFile OnChange="OnFileChange" class="form-control" />
+        </div>
+        <div class="col-md-6 mb-2">
+            <button class="btn btn-success w-100" @onclick="async () => await UploadFile()" disabled="@(_selectedFile == null)">Upload csv</button>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th @onclick="async () => await SortByTitle()" class="@GetSortClassByTitle() text-center">Title @GetSortArrow("title")</th>
+                    <th @onclick="async () => await SortByAuthor()" class="@GetSortClassByAuthor() text-center">Author @GetSortArrow("author")</th>
+                    <th @onclick="async () => await SortByGenre()" class="@GetSortClassByGenre() text-center">Genre @GetSortArrow("genre")</th>
+                    <th @onclick="async () => await SortByPublishedYear()" class="@GetSortClassByPublishedYear() text-center">Published Year @GetSortArrow("publishedyear")</th>
+                    <th colspan="3">Actions</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                @if (_isAddingNewBook)
+                {
+                    <tr>
+                        <td><InputText class="form-control" @bind-Value="_newBook.Title" required /></td>
+                        <td><InputText class="form-control" @bind-Value="_newBook.Author" required /></td>
+                        <td><InputText class="form-control" @bind-Value="_newBook.Genre" required /></td>
+                        <td><InputNumber class="form-control" @bind-Value="_newBook.PublishedYear" max="@DateTime.UtcNow.Year" min="0" required /></td>
+                        <td>
+                            <button class="btn btn-sm btn-success mt-1" @onclick="async () => await SaveNewBook()">Save</button>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-secondary mt-1" @onclick="CancelNewBook">Cancel</button>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-info mt-1" @onclick="() => CreateBook()">Expand</button>
+                        </td>
+                    </tr>
+                }
+                @foreach (var book in _books.Data)
+                {
+                    <tr>
+                        @if (book.IsEditing)
+                        {
+                            <td><InputText class="form-control" @bind-Value="book.Title" required /></td>
+                            <td><InputText class="form-control" @bind-Value="book.Author" required /></td>
+                            <td><InputText class="form-control" @bind-Value="book.Genre" required /></td>
+                            <td><InputNumber class="form-control" @bind-Value="book.PublishedYear" max="@DateTime.UtcNow.Year" min="0" required /></td>
+                            <td>
+                                <button class="btn btn-sm btn-success mt-1" @onclick="async () => await SaveBook(book)">Save</button>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-secondary mt-1" @onclick="() => CancelEdit(book)">Cancel</button>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-info mt-1" @onclick="() => EditBook(book.Id)">Expand</button>
+                            </td>
+                        }
+                        else
+                        {
+                            <td>@book.Title</td>
+                            <td>@book.Author</td>
+                            <td>@book.Genre</td>
+                            <td>@book.PublishedYear</td>
+                            <td>
+                                <button class="btn btn-sm btn-warning mt-1" @onclick="() => EditBook(book)">Edit</button>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-danger mt-1" @onclick="async () => await ConfirmDelete(book.Id)">Delete</button>
+                            </td>
+                            <td>
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="d-flex justify-content-between">
+        <button class="btn btn-secondary" @onclick="PreviousPage" disabled="@(_books.Data.Count == 0 || _currentPage == 1)">Previous</button>
+        @if (_books.Data.Count > 0)
+        {
+            <span>Page @_currentPage of @Math.Ceiling((decimal)_books.Total / (decimal)_pageSize)</span>
+        }
+        <button class="btn btn-secondary" @onclick="NextPage" disabled="@(_books.Data.Count == 0 || Math.Ceiling((decimal)_books.Total / (decimal)_pageSize) <= _currentPage)">Next</button>
+    </div>
+</div>
+
+@code {
+    private string _message = "";
+    private string _alertType = "alert-success";
+    private string _searchTitle = "";
+    private string _searchAuthor = "";
+    private string _searchGenre = "";
+    private PagedResult<Book> _books = new PagedResult<Book>();
+    private Book _newBook = new Book();
+    private IBrowserFile? _selectedFile;
+    private int _currentPage = 1;
+    private int _pageSize = 10;
+    private string _sorting = "createat";
+    private string _order = "desc";
+    private bool _isAddingNewBook = false;
+
+
+
+    protected override async Task OnInitializedAsync() => await SearchBooks();
+
+    private async Task SearchBooks(string? message = null, string alertType = "alert-success")
+    {
+        if (!string.IsNullOrEmpty(message))
+            _message = message;
+        _alertType = alertType;
+
+        _books = await BookService.GetBooksAsync(_searchTitle, _searchAuthor, _searchGenre, _sorting, _order, _currentPage, _pageSize);
+    }
+
+    private async Task ResetBooks()
+    {
+        _searchTitle = "";
+        _searchAuthor = "";
+        _searchGenre = "";
+        _currentPage = 1;
+        _sorting = "createat";
+        _order = "desc";
+
+        _books = await BookService.GetBooksAsync(_searchTitle, _searchAuthor, _searchGenre, _sorting, _order, _currentPage, _pageSize);
+    }
+
+    private void AddNewBook()
+    {
+        _isAddingNewBook = true;
+        _newBook = new Book();
+    }
+
+    private void CancelNewBook()
+    {
+        _isAddingNewBook = false;
+        _newBook = new Book();
+    }
+
+    private bool ChekForm(Book book)
+    {
+        if (string.IsNullOrEmpty(book.Title) || string.IsNullOrEmpty(book.Author) || string.IsNullOrEmpty(book.Genre) || book.PublishedYear < 0 || book.PublishedYear > DateTime.UtcNow.Year)
+        {
+            _message = "Please fill in all fields correctly.";
+            _alertType = "alert-warning";
+            return false;
+        }
+        _message = "";
+        _alertType = "alert-success";
+        return true;
+    }
+
+    private async Task SaveNewBook()
+    {
+        if (ChekForm(_newBook))
+        {            
+            await BookService.CreateBookAsync(_newBook);
+            _newBook = new Book();
+            _isAddingNewBook = false;
+            await SearchBooks();
+        }
+    }
+
+    private void EditBook(Guid? id) => Navigation.NavigateTo($"/edit-book/{id}");
+
+    private void CreateBook() => Navigation.NavigateTo($"/edit-book/");
+
+    private void EditBook(Book book)
+    {
+        book.IsEditing = true;
+    }
+
+    private void CancelEdit(Book book)
+    {
+        book.IsEditing = false;
+    }
+
+    private async Task SaveBook(Book book)
+    {
+        if (ChekForm(book))
+        {
+            await BookService.UpdateBookAsync(book.Id, book);
+            book.IsEditing = false;
+            await SearchBooks();
+        }
+    }
+
+    private async Task ConfirmDelete(Guid id)
+    {
+        bool confirmed = await JS.InvokeAsync<bool>("confirm", "Are you sure you want to delete this book?");
+        if (confirmed)
+        {
+            await DeleteBook(id);
+        }
+    }
+
+    private async Task DeleteBook(Guid id)
+    {
+        await BookService.DeleteBookAsync(id);
+        await SearchBooks();
+    }
+
+    private void OnFileChange(InputFileChangeEventArgs e)
+    {
+        _selectedFile = e.File;
+    }
+
+    private async Task UploadFile()
+    {
+        if (_selectedFile != null)
+        {
+            var content = new MultipartFormDataContent();
+            var streamContent = new StreamContent(_selectedFile.OpenReadStream());
+            content.Add(streamContent, "file", _selectedFile.Name);
+            var result = await BookService.BulkUploadAsync(content);
+            var alertType = "alert-success";
+            if (!result.Success)
+            {
+                alertType = "alert-warning";
+            }
+            _selectedFile = null;
+            await SearchBooks(result.Message, alertType);
+        }
+    }
+
+    private void ClearMessage()
+    {
+        _message = string.Empty;
+    }
+
+    private async Task PreviousPage()
+    {
+        if (_currentPage > 1)
+        {
+            _currentPage--;
+            await SearchBooks();
+        }
+    }
+
+    private async Task NextPage()
+    {
+        if (@Math.Ceiling((decimal)_books.Total / (decimal)_pageSize) >= _currentPage)
+        {
+            _currentPage++;
+            await SearchBooks();
+        }
+    }
+
+    private async Task SortByTitle() => await SortBy("title");
+    private async Task SortByAuthor() => await SortBy("author");
+    private async Task SortByGenre() => await SortBy("genre");
+    private async Task SortByPublishedYear() => await SortBy("publishedyear");
+
+    private async Task SortBy(string column)
+    {
+        if (_sorting == column)
+        {
+            _order = _order == "asc" ? "desc" : "asc";
+        }
+        else
+        {
+            _sorting = column;
+            _order = "asc";
+        }
+        await SearchBooks();
+    }
+
+    private string GetSortClassByTitle() => GetSortClass("title");
+    private string GetSortClassByAuthor() => GetSortClass("author");
+    private string GetSortClassByGenre() => GetSortClass("genre");
+    private string GetSortClassByPublishedYear() => GetSortClass("publishedyear");
+
+    private string GetSortClass(string column) => _sorting == column ? "text-primary font-weight-bold" : "";
+
+    private string GetSortArrow(string column)
+    {
+        if (_sorting == column)
+        {
+            return _order == "asc" ? "▲" : "▼";
+        }
+        return "";
+    }
+}

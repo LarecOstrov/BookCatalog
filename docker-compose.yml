@@ -1,0 +1,17 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: BookCatalogBackend/Dockerfile
+    ports:
+      - "4567:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+  frontend:
+    build:
+      context: .
+      dockerfile: BookCatalogFrontend/Dockerfile
+    ports:
+      - "8080:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
